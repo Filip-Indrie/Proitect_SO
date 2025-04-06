@@ -1,0 +1,4 @@
+TO DO:
+- remove treasure option
+- remove hunt option
+- log system
