@@ -57,13 +57,13 @@ int read_treasure_from_stdin(treasure_t *treasure){
     if the first invalid char is \n then
     the input is valid, otherwise it isn't
   */
-  if(*endptr!='\n') return 0;
+  if(*endptr!='\n' || endptr==buffer) return 0;
 
   endptr=NULL;
   printf("Value: ");
   if(fgets(buffer,20,stdin)==NULL) return 0;
   treasure->value=(int)strtol(buffer,&endptr,10);
-  if(*endptr!='\n') return 0;
+  if(*endptr!='\n' || endptr==buffer) return 0;
   
   endptr=NULL;
   printf("User Name: ");
@@ -79,13 +79,13 @@ int read_treasure_from_stdin(treasure_t *treasure){
   printf("Latitude: ");
   if(fgets(buffer,20,stdin)==NULL) return 0;
   treasure->latitude=strtof(buffer,&endptr);
-  if(*endptr!='\n') return 0;
+  if(*endptr!='\n' || endptr==buffer) return 0;
 
   endptr=NULL;
   printf("Longitude: ");
   if(fgets(buffer,20,stdin)==NULL) return 0;
   treasure->longitude=strtof(buffer,&endptr);
-  if(*endptr!='\n') return 0;
+  if(*endptr!='\n' || endptr==buffer) return 0;
   
   return 1;
 }
@@ -776,9 +776,10 @@ void remove_treasure(char hunt_id[],int treasure_id){
 	*/
 	log_remove_treasure(log_file_desc,treasure);
 	/*
-	  closes files
+	  closes log file
 	*/
-	if(close(log_file_desc)!=0 || close(treasure_file_desc)!=0){
+	if(close(log_file_desc)!=0){
+	  printf("aici1\n");
 	  perror(NULL);
 	  exit(142);
 	}
