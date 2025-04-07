@@ -67,12 +67,12 @@ int read_treasure_from_stdin(treasure_t *treasure){
   
   endptr=NULL;
   printf("User Name: ");
-  if(fgets(treasure->user_name,NAME_LENGTH,stdin)==NULL) return 0;
+  if(fgets(treasure->user_name,NAME_LENGTH,stdin)==NULL || strlen(treasure->user_name)==1) return 0;
   treasure->user_name[strlen(treasure->user_name)-1]='\0';
 
   endptr=NULL;
   printf("Clue: ");
-  if(fgets(treasure->clue,CLUE_LENGTH,stdin)==NULL) return 0;
+  if(fgets(treasure->clue,CLUE_LENGTH,stdin)==NULL || strlen(treasure->clue)==1) return 0;
   treasure->clue[strlen(treasure->clue)-1]='\0';
 
   endptr=NULL;
@@ -727,8 +727,8 @@ void remove_treasure(char hunt_id[],int treasure_id){
 	equal to the one received through
 	treasure_id parameter
       */
-      int bytes_read=0,found=0;
-      treasure_t treasure;
+      int bytes_read=0,found=0,got_first=0;
+      treasure_t treasure,log_treasure;
       while(read_treasure_from_file(treasure_file_desc,&treasure)){
 	bytes_read+=treasure_size();
 	/*
@@ -736,6 +736,13 @@ void remove_treasure(char hunt_id[],int treasure_id){
 	*/
 	if(treasure_id==treasure.treasure_id){
 	  found=1;
+	  /*
+	    if its the first one found, saves it so it can be logged
+	  */
+	  if(!got_first){
+	    log_treasure=treasure;
+	    got_first=1;
+	  }
 	}
 	if(found){
 	  /*
@@ -774,12 +781,11 @@ void remove_treasure(char hunt_id[],int treasure_id){
 	/*
 	  logs operation
 	*/
-	log_remove_treasure(log_file_desc,treasure);
+	log_remove_treasure(log_file_desc,log_treasure);
 	/*
 	  closes log file
 	*/
 	if(close(log_file_desc)!=0){
-	  printf("aici1\n");
 	  perror(NULL);
 	  exit(142);
 	}
