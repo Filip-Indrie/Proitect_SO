@@ -731,14 +731,21 @@ void remove_treasure(char hunt_id[],int treasure_id){
       treasure_t treasure;
       while(read_treasure_from_file(treasure_file_desc,&treasure)){
 	bytes_read+=treasure_size();
+	/*
+	  checks if it found the treasure
+	*/
 	if(treasure_id==treasure.treasure_id){
 	  found=1;
 	}
 	if(found){
-	  treasure_t aux;
-	  if(read_treasure_from_file(treasure_file_desc,&aux)){
+	  /*
+	    overwrites the current treasure with the next one
+	    (in the long run it eliminates the found treasure)
+	  */
+	  treasure_t temp;
+	  if(read_treasure_from_file(treasure_file_desc,&temp)){
 	    lseek(treasure_file_desc,-2*treasure_size(),SEEK_CUR);
-	    write_treasure_to_file(treasure_file_desc,aux);
+	    write_treasure_to_file(treasure_file_desc,temp);
 	  }
 	}
       }
