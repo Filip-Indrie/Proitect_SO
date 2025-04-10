@@ -17,15 +17,6 @@ typedef struct{
   char user_name[NAME_LENGTH],clue[CLUE_LENGTH];
 }treasure_t;
 
-size_t treasure_size(){
-  /*
-    return the size of treasure_t
-    (didn't use sizeof(treasure_t) because that also counts the paddings)
-  */
-  treasure_t treasure;
-  return sizeof(treasure.treasure_id)+sizeof(treasure.value)+sizeof(treasure.user_name)+sizeof(treasure.clue)+sizeof(treasure.latitude)+sizeof(treasure.longitude);
-}
-
 void print_usage_info(){
   printf("Usage: ./treasure_hunt <operation> <arg1> <arg2> ...\n");
   printf("Operations:\n");
@@ -94,87 +85,13 @@ void write_treasure_to_file(int treasure_file_desc,treasure_t treasure){
   /*
     writes data to file
   */
-  if(write(treasure_file_desc,&(treasure.treasure_id),sizeof(treasure.treasure_id))==-1){
+  if(write(treasure_file_desc,&treasure,sizeof(treasure_t))==-1){
     perror(NULL);
     if(close(treasure_file_desc)!=0){
       perror(NULL);
       exit(141);
     }
     exit(170);
-  }
-
-  if(write(treasure_file_desc,&(treasure.value),sizeof(treasure.value))==-1){
-    perror(NULL);
-    if(close(treasure_file_desc)!=0){
-      perror(NULL);
-      exit(141);
-    }
-    exit(171);
-  }
-
-  int user_name_length=strlen(treasure.user_name);
-  if(write(treasure_file_desc,treasure.user_name,user_name_length)==-1){
-    perror(NULL);
-    if(close(treasure_file_desc)!=0){
-      perror(NULL);
-      exit(141);
-    }
-    exit(173);
-  }
-  /*
-    adds padding of 0 to make the user name size in file consistent
-  */
-  int zero=0;
-  for(int i=0;i<NAME_LENGTH-user_name_length;++i){
-    if(write(treasure_file_desc,&zero,1)==-1){
-      perror(NULL);
-      if(close(treasure_file_desc)!=0){
-	perror(NULL);
-	exit(141);
-      }
-      exit(174);
-    }
-  }
-
-  int clue_length=strlen(treasure.clue);
-  if(write(treasure_file_desc,treasure.clue,clue_length)==-1){
-    perror(NULL);
-    if(close(treasure_file_desc)!=0){
-      perror(NULL);
-      exit(141);
-    }
-    exit(176);
-  }
-  /*
-    adds padding of 0 to make the clue size in file consistent
-  */
-  for(int i=0;i<CLUE_LENGTH-clue_length;++i){
-    if(write(treasure_file_desc,&zero,1)==-1){
-      perror(NULL);
-      if(close(treasure_file_desc)!=0){
-	perror(NULL);
-	exit(141);
-      }
-      exit(177);
-    }
-  }
-
-  if(write(treasure_file_desc,&(treasure.latitude),sizeof(treasure.latitude))==-1){
-    perror(NULL);
-    if(close(treasure_file_desc)!=0){
-      perror(NULL);
-      exit(141);
-    }
-    exit(178);
-  }
-
-  if(write(treasure_file_desc,&(treasure.longitude),sizeof(treasure.longitude))==-1){
-    perror(NULL);
-    if(close(treasure_file_desc)!=0){
-      perror(NULL);
-      exit(141);
-    }
-    exit(179);
   }
 }
 
@@ -413,42 +330,15 @@ int read_treasure_from_file(int treasure_file_desc,treasure_t *treasure){
     reading and checking if all bytes were read
   */
   int bytes_read;
-  if((bytes_read=read(treasure_file_desc,&(treasure->treasure_id),sizeof(treasure->treasure_id)))==-1){
+  if((bytes_read=read(treasure_file_desc,treasure,sizeof(treasure_t)))==-1){
     perror(NULL);
+    if(close(treasure_file_desc)!=0){
+      perror(NULL);
+      exit(141);
+    }
     exit(240);
   }
-  if(bytes_read!=sizeof(treasure->treasure_id)) return 0;
-  
-  if((bytes_read=read(treasure_file_desc,&(treasure->value),sizeof(treasure->value)))==-1){
-    perror(NULL);
-    exit(240);
-  }
-  if(bytes_read!=sizeof(treasure->value)) return 0;
-
-  if((bytes_read=read(treasure_file_desc,treasure->user_name,NAME_LENGTH))==-1){
-    perror(NULL);
-    exit(240);
-  }
-  if(bytes_read!=NAME_LENGTH) return 0;
-  
-  if((bytes_read=read(treasure_file_desc,treasure->clue,CLUE_LENGTH))==-1){
-    perror(NULL);
-    exit(240);
-  }
-  if(bytes_read!=CLUE_LENGTH) return 0;
-  
-  if((bytes_read=read(treasure_file_desc,&(treasure->latitude),sizeof(treasure->latitude)))==-1){
-    perror(NULL);
-    exit(240);
-  }
-  if(bytes_read!=sizeof(treasure->latitude)) return 0;
-  
-  if((bytes_read=read(treasure_file_desc,&(treasure->longitude),sizeof(treasure->longitude)))==-1){
-    perror(NULL);
-    exit(240);
-  }
-  if(bytes_read!=sizeof(treasure->longitude)) return 0;
-  
+  if(bytes_read!=sizeof(treasure_t)) return 0;
   return 1;
 }
 
@@ -727,37 +617,60 @@ void remove_treasure(char hunt_id[],int treasure_id){
 	equal to the one received through
 	treasure_id parameter
       */
-      int bytes_read=0,found=0,got_first=0;
+      int bytes_read=0,found=0;
+      off_t write_pos,read_pos;
       treasure_t treasure,log_treasure;
+      /*
+	write_pos containts the offset at which we can write
+      */
+      write_pos=lseek(treasure_file_desc,0,SEEK_SET);
       while(read_treasure_from_file(treasure_file_desc,&treasure)){
-	bytes_read+=treasure_size();
-	/*
-	  checks if it found the treasure
-	*/
-	if(treasure_id==treasure.treasure_id){
+	if(treasure.treasure_id!=treasure_id){
+	  bytes_read+=sizeof(treasure_t);
+	  /*
+	    read_pos retains the offset at which we can read
+	  */
+	  read_pos=lseek(treasure_file_desc,0,SEEK_CUR);
+	  /*
+	    writes at write_pos
+	  */
+	  lseek(treasure_file_desc,write_pos,SEEK_SET);
+	  write_treasure_to_file(treasure_file_desc,treasure);
+	  /*
+	    updates write_pos
+	  */
+	  write_pos=lseek(treasure_file_desc,0,SEEK_CUR);
+	  /*
+	    returns to read_pos for the next read
+	  */
+	  lseek(treasure_file_desc,read_pos,SEEK_SET);
+	}
+	else if(!found){
 	  found=1;
-	  /*
-	    if its the first one found, saves it so it can be logged
-	  */
-	  if(!got_first){
-	    log_treasure=treasure;
-	    got_first=1;
-	  }
+	  log_treasure=treasure;
 	}
+	/*
 	if(found){
-	  /*
-	    overwrites the current treasure with the next one
-	    (in the long run it eliminates the found treasure)
-	  */
-	  treasure_t temp;
-	  if(read_treasure_from_file(treasure_file_desc,&temp)){
-	    lseek(treasure_file_desc,-2*treasure_size(),SEEK_CUR);
-	    write_treasure_to_file(treasure_file_desc,temp);
-	  }
+	  
+	    //overwrites the previous treasure with the current one
+	    //(in the long run it eliminates the found treasure)
+	  
+	  lseek(treasure_file_desc,-2*sizeof(treasure_t),SEEK_CUR);
+	  write_treasure_to_file(treasure_file_desc,treasure);
+	  lseek(treasure_file_desc,sizeof(treasure_t),SEEK_CUR);
 	}
+
+	bytes_read+=sizeof(treasure_t);
+	
+	  //checks if it found the treasure
+	
+	if(treasure_id==treasure.treasure_id && !found){
+	  found=1;
+	  log_treasure=treasure;
+	}
+	*/
       }
       if(found){
-	bytes_read-=treasure_size();
 	ftruncate(treasure_file_desc,bytes_read);
 	/*
 	  closes file
