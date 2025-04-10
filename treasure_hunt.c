@@ -22,12 +22,48 @@ void print_usage_info(){
   printf("Operations:\n");
   printf("\t--add <hunt_id> --> adds a new treasure to the specified hunt\n");
   printf("\t--list <hunt_id> --> lists all treasures in the specified hunt\n");
-  printf("\t--view <hunt_id> <treasure_id> --> lists the details of the specified treasure in the specified hunt\n");
-  printf("\t--remove_treasure <hunt_id> <treasure_id> --> removes the specified treasure from the specified hunt\n");
+  printf("\t--view <hunt_id> <treasure_id> --> lists the details of all treasures with the specified id in the specified hunt\n");
+  printf("\t--remove_treasure <hunt_id> <treasure_id> --> removes the treasures with the specified if from the specified hunt\n");
   printf("\t--remove_hunt <hunt_id> --> removes the specified hunt\n");
 }
 
-int read_treasure_from_stdin(treasure_t *treasure){
+int read_treasure_from_file(int treasure_file_desc,treasure_t *treasure){
+  /*
+    returns 1 if all data was read and
+    0 if read data is incomplete or
+    an error occurred
+  */
+  /*
+    reading and checking if all bytes were read
+  */
+  int bytes_read;
+  if((bytes_read=read(treasure_file_desc,treasure,sizeof(treasure_t)))==-1){
+    perror(NULL);
+    if(close(treasure_file_desc)!=0){
+      perror(NULL);
+      exit(141);
+    }
+    exit(240);
+  }
+  if(bytes_read!=sizeof(treasure_t)) return 0;
+  return 1;
+}
+
+void write_treasure_to_file(int treasure_file_desc,treasure_t treasure){
+  /*
+    writes data to file
+  */
+  if(write(treasure_file_desc,&treasure,sizeof(treasure_t))==-1){
+    perror(NULL);
+    if(close(treasure_file_desc)!=0){
+      perror(NULL);
+      exit(141);
+    }
+    exit(170);
+  }
+}
+
+int read_treasure_from_stdin(treasure_t *treasure,char *hunt_id){
   /*
     Reads treasure input
     Return 1 if all inputs are valid and 0 otherwise
@@ -35,19 +71,10 @@ int read_treasure_from_stdin(treasure_t *treasure){
   char buffer[20],*endptr=NULL;
   
   printf("Treasure ID: ");
-  /*
-    reads to a string
-  */
   if(fgets(buffer,20,stdin)==NULL) return 0;
-  /*
-    cheks if the input is valid
-    (we can convert the entire string into an int)
-  */
+
+  //checks if input is valid
   treasure->treasure_id=(int)strtol(buffer,&endptr,10);
-  /*
-    if the first invalid char is \n then
-    the input is valid, otherwise it isn't
-  */
   if(*endptr!='\n' || endptr==buffer) return 0;
 
   endptr=NULL;
@@ -77,22 +104,40 @@ int read_treasure_from_stdin(treasure_t *treasure){
   if(fgets(buffer,20,stdin)==NULL) return 0;
   treasure->longitude=strtof(buffer,&endptr);
   if(*endptr!='\n' || endptr==buffer) return 0;
+
+  //gets absolute path of the treasures file
+  char path[PATH_MAX];
+  if(getcwd(path,PATH_MAX)==NULL){
+    perror(NULL);
+    exit(21);
+  }
+  strcat(path,"/");
+  strcat(path,hunt_id);
+  strcat(path,"/treasures.bin");
+  int treasure_file_desc;
+  treasure_t temp;
+  if((treasure_file_desc=open(path,O_RDONLY))!=-1){
+    //if file exists, checks for no treasure_id - user_name duplicates
+    while(read_treasure_from_file(treasure_file_desc,&temp)){
+      if(temp.treasure_id==treasure->treasure_id && strcmp(temp.user_name,treasure->user_name)==0) return 0;
+    }
+    return 1;
+  }
+  //if file doesn't exist, there are no duplicates
+  else if(errno==ENOENT) return 1;
   
-  return 1;
+  //if it encountered any other error, exits
+  perror(NULL);
+  exit(-1);
 }
 
-void write_treasure_to_file(int treasure_file_desc,treasure_t treasure){
-  /*
-    writes data to file
-  */
-  if(write(treasure_file_desc,&treasure,sizeof(treasure_t))==-1){
-    perror(NULL);
-    if(close(treasure_file_desc)!=0){
-      perror(NULL);
-      exit(141);
-    }
-    exit(170);
-  }
+void write_treasure_to_stdin(treasure_t treasure){
+  printf("Treasure ID: %d\n",treasure.treasure_id);
+  printf("Value: %d\n",treasure.value);
+  printf("User Name: %s\n",treasure.user_name);
+  printf("Clue: %s\n",treasure.clue);
+  printf("Latitude: %f\n",treasure.latitude);
+  printf("Longitude: %f\n\n",treasure.longitude);
 }
 
 void log_operation(int log_file_desc,char *message){
@@ -125,8 +170,8 @@ void log_add(int log_file_desc,treasure_t treasure){
   /*
     creates and appropriate message and calls log_operation
   */
-  char message[40];
-  sprintf(message,"Added treasure with ID: %d\n\n",treasure.treasure_id);
+  char message[120];
+  sprintf(message,"Added treasure with ID: %d and User Name: %s\n\n",treasure.treasure_id,treasure.user_name);
   log_operation(log_file_desc,message);
 }
 
@@ -141,8 +186,8 @@ void log_view(int log_file_desc,treasure_t treasure){
   /*
     creates and appropriate message and calls log_operation
   */
-  char message[40];
-  sprintf(message,"Viewed treasure with ID: %d\n\n",treasure.treasure_id);
+  char message[120];
+  sprintf(message,"Viewed treasure with ID: %d and User Name: %s\n\n",treasure.treasure_id,treasure.user_name);
   log_operation(log_file_desc,message);
 }
 
@@ -150,8 +195,8 @@ void log_remove_treasure(int log_file_desc,treasure_t treasure){
   /*
     creates and appropriate message and calls log_operation
   */
-  char message[40];
-  sprintf(message,"Removed treasure with ID: %d\n\n",treasure.treasure_id);
+  char message[120];
+  sprintf(message,"Removed treasure with ID: %d and User Name: %s\n\n",treasure.treasure_id,treasure.user_name);
   log_operation(log_file_desc,message);
 }
 
@@ -162,7 +207,7 @@ void add(char hunt_id[]){
   treasure_t treasure;
   int valid;
   do{
-    valid=read_treasure_from_stdin(&treasure);
+    valid=read_treasure_from_stdin(&treasure,hunt_id);
     if(!valid) printf("INVALID INPUT\n");
   }while(valid==0);
   /*
@@ -308,40 +353,6 @@ void add(char hunt_id[]){
   }
 }
 
-void print_treasure(treasure_t treasure){
-  /*
-    printing treasure data to standard output
-  */
-  printf("%d\n",treasure.treasure_id);
-  printf("%d\n",treasure.value);
-  printf("%s\n",treasure.user_name);
-  printf("%s\n",treasure.clue);
-  printf("%f\n",treasure.latitude);
-  printf("%f\n\n",treasure.longitude);
-}
-
-int read_treasure_from_file(int treasure_file_desc,treasure_t *treasure){
-  /*
-    returns 1 if all data was read and
-    0 if read data is incomplete or
-    an error occurred
-  */
-  /*
-    reading and checking if all bytes were read
-  */
-  int bytes_read;
-  if((bytes_read=read(treasure_file_desc,treasure,sizeof(treasure_t)))==-1){
-    perror(NULL);
-    if(close(treasure_file_desc)!=0){
-      perror(NULL);
-      exit(141);
-    }
-    exit(240);
-  }
-  if(bytes_read!=sizeof(treasure_t)) return 0;
-  return 1;
-}
-
 void list(char hunt_id[]){
   /*
     getting the absolute path of program direcotry
@@ -411,7 +422,7 @@ void list(char hunt_id[]){
       */
       treasure_t treasure;
       while(read_treasure_from_file(treasure_file_desc,&treasure)){
-	print_treasure(treasure);
+	write_treasure_to_stdin(treasure);
       }
       /*
 	creates path for log file
@@ -499,62 +510,42 @@ void view(char hunt_id[],int treasure_id){
 	exit(131);
       }
       /*
+	creates path for log file
+      */
+      strcpy(strrchr(path,'/'),"/logged_hunt.txt");
+      /*
+	opens log file
+      */
+      int log_file_desc;
+      if((log_file_desc=open(path,O_WRONLY|O_APPEND,0644))==-1){
+	perror(NULL);
+	exit(132);
+      }
+      /*
 	parses through the treasures and
 	prints the treasure with treasure_id
 	equal to the one received through
 	treasure_id parameter
       */
       treasure_t treasure;
+      int found=0;
       while(read_treasure_from_file(treasure_file_desc,&treasure)){
 	if(treasure.treasure_id==treasure_id){
-	  print_treasure(treasure);
-	  /*
-	    creates path for log file
-	  */
-	  strcpy(strrchr(path,'/'),"/logged_hunt.txt");
-	  /*
-	    opens log file
-	  */
-	  int log_file_desc;
-	  if((log_file_desc=open(path,O_WRONLY|O_APPEND,0644))==-1){
-	    perror(NULL);
-	    exit(132);
-	  }
+	  found=1;
+	  write_treasure_to_stdin(treasure);
 	  /*
 	    logs operation
 	  */
 	  log_view(log_file_desc,treasure);
-	  /*
-	    closes files
-	  */
-	  if(close(log_file_desc)!=0 || close(treasure_file_desc)!=0){
-	    perror(NULL);
-	    exit(142);
-	  }
-	  /*
-	    closes directory
-	  */
-	  if(closedir(current_dir)==-1){
-	    perror(NULL);
-	    exit(-1);
-	  }
-	  return;
 	}
       }
-      printf("Treasure with id %d does not exist\n",treasure_id);
+      if(!found) printf("Treasure with id %d does not exist\n",treasure_id);
       /*
-	closes file
+	closes files and directory
       */
-      if(close(treasure_file_desc)!=0){
+      if(close(treasure_file_desc)!=0 || close(log_file_desc)!=0 || closedir(current_dir)==-1){
 	perror(NULL);
 	exit(142);
-      }
-      /*
-	closes directory
-      */
-      if(closedir(current_dir)==-1){
-	perror(NULL);
-	exit(-1);
       }
       return;
     }
