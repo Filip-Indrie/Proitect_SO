@@ -25,9 +25,20 @@ void print_usage_info(){
   printf("Operations:\n");
   printf("\t--add <hunt_id> --> adds a new treasure to the specified hunt\n");
   printf("\t--list <hunt_id> --> lists all treasures in the specified hunt\n");
+  printf("\t--list_hunts <hunt_id> --> lists all hunts and the total number of treasures in the respective hunt\n");
   printf("\t--view <hunt_id> <treasure_id> <user_name> --> lists the details of all treasures with the specified ID and User Name in the specified hunt. If either ID or User Name is not specified, it lists all treasures that have their respective field mathcing wtih the specfied argument. If none are specfed, it lists all the treasures in the specified hunt\n");
   printf("\t--remove_treasure <hunt_id> <treasure_id> <user_name> --> removes the treasures with the specified ID and User Name from the specified hunt. (ID or User Name may not be specified (one at a time); in that case, it removes all treasures that have their respective field mathcing wtih the specfied argument)\n");
   printf("\t--remove_hunt <hunt_id> --> removes the specified hunt\n");
+}
+
+void clear_buffer(){
+  /*
+    clears buffer
+  */
+  char buffer[100];
+  while(fgets(buffer,100,stdin)!=NULL){
+    if(buffer[strlen(buffer)-1]=='\n') return;
+  }
 }
 
 int read_treasure_from_file(int treasure_file_desc,treasure_t *treasure){
@@ -74,35 +85,47 @@ int read_treasure_from_stdin(treasure_t *treasure,char *hunt_id){
 
   //checks if input is valid
   treasure->treasure_id=(int)strtol(buffer,&endptr,10);
-  if(*endptr!='\n' || endptr==buffer) return 0;
+  if(*endptr!='\n' || endptr==buffer){
+    if(buffer[strlen(buffer)-1]!='\n') clear_buffer();
+    return 0;
+  }
 
   endptr=NULL;
   printf("Value: ");
   if(fgets(buffer,20,stdin)==NULL) return 0;
   treasure->value=(int)strtol(buffer,&endptr,10);
-  if(*endptr!='\n' || endptr==buffer) return 0;
+  if(*endptr!='\n' || endptr==buffer){
+    if(buffer[strlen(buffer)-1]!='\n') clear_buffer();
+    return 0;
+  }
   
-  endptr=NULL;
   printf("User Name: ");
   if(fgets(treasure->user_name,NAME_LENGTH,stdin)==NULL || strlen(treasure->user_name)==1) return 0;
+  if(treasure->user_name[strlen(treasure->user_name)-1]!='\n') clear_buffer();
   treasure->user_name[strlen(treasure->user_name)-1]='\0';
 
-  endptr=NULL;
   printf("Clue: ");
   if(fgets(treasure->clue,CLUE_LENGTH,stdin)==NULL || strlen(treasure->clue)==1) return 0;
+  if(treasure->clue[strlen(treasure->clue)-1]!='\n') clear_buffer();
   treasure->clue[strlen(treasure->clue)-1]='\0';
 
   endptr=NULL;
   printf("Latitude: ");
   if(fgets(buffer,20,stdin)==NULL) return 0;
   treasure->latitude=strtof(buffer,&endptr);
-  if(*endptr!='\n' || endptr==buffer) return 0;
+  if(*endptr!='\n' || endptr==buffer){
+    if(buffer[strlen(buffer)-1]!='\n') clear_buffer();
+    return 0;
+  }
 
   endptr=NULL;
   printf("Longitude: ");
   if(fgets(buffer,20,stdin)==NULL) return 0;
   treasure->longitude=strtof(buffer,&endptr);
-  if(*endptr!='\n' || endptr==buffer) return 0;
+  if(*endptr!='\n' || endptr==buffer){
+    if(buffer[strlen(buffer)-1]!='\n') clear_buffer();
+    return 0;
+  }
 
   //gets  path of the treasures file
   char path[PATH_MAX]="";
@@ -274,7 +297,7 @@ void list(char hunt_id[]){
     perror(NULL);
     exit(-1);
   }
-  else if(stat_return_val==0 && !S_ISDIR(dir_stat.st_mode)){
+  else if(!S_ISDIR(dir_stat.st_mode)){
     printf("Provided file is not a directory\n");
     return;
   }
@@ -350,6 +373,59 @@ void list(char hunt_id[]){
   return;
 }
 
+void list_hunts(){
+  /*
+    lists all hunts and the number of treasures in each one
+  */
+  int found=0;
+  
+  DIR *current_dir;
+  if((current_dir=opendir("."))==NULL){
+    perror(NULL);
+    exit(-1);
+  }
+  struct dirent *current_dir_entry;
+  errno=0;
+  while((current_dir_entry=readdir(current_dir))!=NULL){
+    if(strcmp(current_dir_entry->d_name,".")!=0 && strcmp(current_dir_entry->d_name,"..")!=0){
+      struct stat entry_stat;
+      int stat_return_val=stat(current_dir_entry->d_name,&entry_stat);
+      if(stat_return_val!=0){
+	perror(NULL);
+	exit(-1);
+      }
+      else if(S_ISDIR(entry_stat.st_mode)){
+	char treasures_file_path[PATH_MAX]="./";
+	strcat(treasures_file_path,current_dir_entry->d_name);
+	strcat(treasures_file_path,"/treasures.bin");
+	struct stat treasures_file_stat;
+	int treasures_file_stat_return_val=stat(treasures_file_path,&treasures_file_stat);
+	if(treasures_file_stat_return_val==0 && S_ISREG(treasures_file_stat.st_mode)){
+	  found=1;
+	  printf("%s: ",current_dir_entry->d_name);
+	  if(treasures_file_stat.st_size%sizeof(treasure_t)==0){
+	    printf("%ld treasure(s)\n",treasures_file_stat.st_size/sizeof(treasure_t));
+	  }
+	  else{
+	    printf("treasures file corrupted\n");
+	  }
+	}
+	else if(treasures_file_stat_return_val!=0 && errno!=ENOENT){
+	  perror(NULL);
+	  exit(-1);
+	}
+      }
+    }
+    errno=0;
+  }
+  if(errno || closedir(current_dir)==-1){
+    perror(NULL);
+    exit(-1);
+  }
+  if(!found) printf("No hunts found\n");
+  return;
+}
+
 void view(char hunt_id[],int *treasure_id,char *user_name){
   /*
     if both treasure_id and user_name are not NULL, lists all treasures with the respective user_name and treasure_id
@@ -363,7 +439,7 @@ void view(char hunt_id[],int *treasure_id,char *user_name){
     perror(NULL);
     exit(-1);
   }
-  else if(stat_return_val==0 && !S_ISDIR(dir_stat.st_mode)){
+  else if(!S_ISDIR(dir_stat.st_mode)){
     printf("Provided file is not a directory\n");
     return;
   }
@@ -434,7 +510,7 @@ void remove_treasure(char hunt_id[],int *treasure_id,char *user_name){
     perror(NULL);
     exit(-1);
   }
-  else if(stat_return_val==0 && !S_ISDIR(dir_stat.st_mode)){
+  else if(!S_ISDIR(dir_stat.st_mode)){
     printf("Provided file is not a directory\n");
     return;
   }
@@ -566,7 +642,7 @@ void remove_hunt(char hunt_id[]){
     perror(NULL);
     exit(-1);
   }
-  else if(stat_return_val==0 && !S_ISDIR(dir_stat.st_mode)){
+  else if(!S_ISDIR(dir_stat.st_mode)){
     printf("Provided file is not a directory\n");
     return;
   }
@@ -620,7 +696,7 @@ void print_log(char hunt_id[]){
     perror(NULL);
     exit(-1);
   }
-  else if(stat_return_val==0 && !S_ISDIR(dir_stat.st_mode)){
+  else if(!S_ISDIR(dir_stat.st_mode)){
     printf("Provided file is not a directory\n");
     return;
   }
@@ -665,6 +741,9 @@ int main(int argc,char **argv){
   else if(strcmp(argv[1],"--list")==0 && argc==3){
     list(argv[2]);
   }
+  else if(strcmp(argv[1],"--list_hunts")==0 && argc==2){
+    list_hunts();
+  }
   else if(strcmp(argv[1],"--view")==0){
     int treasure_id;
     char *endptr=NULL;
@@ -674,11 +753,11 @@ int main(int argc,char **argv){
       treasure_id=(int)strtol(argv[3],&endptr,10);
       if(*endptr!='\0'){
         printf("Invalid treasue ID\n");
-        return 0;
+        exit(-1);
       }
       if(strlen(argv[4])>=NAME_LENGTH){
 	printf("Invalid User Name\n");
-	return 0;
+	exit(-1);
       }
       view(argv[2],&treasure_id,argv[4]);
     }
@@ -691,7 +770,7 @@ int main(int argc,char **argv){
 	
 	if(strlen(argv[3])>=NAME_LENGTH){
 	  printf("Invalid argument\n");
-	  return 0;
+	  exit(-1);
 	}
 	view(argv[2],NULL,argv[3]);
       }
@@ -704,7 +783,7 @@ int main(int argc,char **argv){
     }
     else{
       printf("Incorrect format\n");
-      return 0;
+      exit(-1);
     }
   }
   else if(strcmp(argv[1],"--remove_treasure")==0){
@@ -716,11 +795,11 @@ int main(int argc,char **argv){
       treasure_id=(int)strtol(argv[3],&endptr,10);
       if(*endptr!='\0'){
         printf("Invalid treasue ID\n");
-        return 0;
+        exit(-1);
       }
       if(strlen(argv[4])>=NAME_LENGTH){
 	printf("Invalid User Name\n");
-	return 0;
+	exit(-1);
       }
       remove_treasure(argv[2],&treasure_id,argv[4]);
     }
@@ -733,7 +812,7 @@ int main(int argc,char **argv){
 	
 	if(strlen(argv[3])>=NAME_LENGTH){
 	  printf("Invalid argument\n");
-	  return 0;
+	  exit(-1);
 	}
 	remove_treasure(argv[2],NULL,argv[3]);
       }
@@ -743,7 +822,7 @@ int main(int argc,char **argv){
     }
     else{
       printf("Incorrect format\n");
-      return 0;
+      exit(-1);
     }
   }
   else if(strcmp(argv[1],"--remove_hunt")==0 && argc==3){
@@ -751,7 +830,7 @@ int main(int argc,char **argv){
   }
   else{
     printf("Incorrect format\n");
-    return 0;
+    exit(-1);
   }
   return 0;
 }
