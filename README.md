@@ -7,4 +7,4 @@ Run the following command to compile all the necessary files:
 
 **You must have bash and gcc installed for this command to run!**
 
-After running that command above, you can run the program using the name you used in that command.
+After running the command above, you can run the program using the name you used in that command.
