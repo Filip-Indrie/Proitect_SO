@@ -5,6 +5,7 @@
 #include <sys/wait.h>
 #include <signal.h>
 #include <errno.h>
+#include <fcntl.h>
 
 int monitor_status=0;//1 if running and 0 if not running
 int accepting_commands=1;//1 if accepting and 0 if rejecting
@@ -100,7 +101,7 @@ void clear_buffer(){
   }
 }
 
-void start_monitor(int *monitor_pid){
+void start_monitor(int *monitor_pid,int *command_file_desc){
   /*
     starts a new process for the treasure_monitor
   */
@@ -110,15 +111,28 @@ void start_monitor(int *monitor_pid){
   }
   if(*monitor_pid==0){
     //child process
+    int temp_file_desc;
+    if((temp_file_desc=open("./.monitor_command",O_CREAT|O_RDONLY,0644))==-1){
+      perror(NULL);
+      exit(-1);
+    }
+    if(dup2(temp_file_desc,0)==-1){
+      perror(NULL);
+      exit(-1);
+    }
     if(execl("./monitor","monitor",NULL)==-1){
       perror(NULL);
       exit(-1);
     }
   }
+  if(((*command_file_desc)=open("./.monitor_command",O_CREAT|O_WRONLY|O_TRUNC,0644))==-1){
+    perror(NULL);
+    exit(-1);
+  }
 }
 
 int main(){
-  int monitor_pid;
+  int monitor_pid,command_file_desc;
   setup_signals();
   while(1){
     print_commands();
@@ -141,7 +155,7 @@ int main(){
     switch(command){
       case 1:{
         if(!monitor_status){
-	  start_monitor(&monitor_pid);
+	  start_monitor(&monitor_pid,&command_file_desc);
 	  pause();
 	}
 	else printf("Monitor alreeady running (PID: %d)\n",monitor_pid);
@@ -157,6 +171,28 @@ int main(){
       }
       case 3:{
         if(monitor_status){
+	  //truncates the command file to prepare it for the next command
+	  ftruncate(command_file_desc,0);
+
+	  //reads hunt name
+	  char hunt_name[100],hunt_name_length;
+	  printf("Hunt name: ");
+	  if(fgets(hunt_name,100,stdin)==NULL){
+	    printf("Error while reading input\n");
+	    exit(-1);
+	  }
+	  printf("\n");
+	  if(hunt_name[strlen(hunt_name)-1]!='\n') clear_buffer();
+	  hunt_name[strlen(hunt_name)-1]='\0';
+	  hunt_name_length=strlen(hunt_name)+1;
+	  if(write(command_file_desc,&hunt_name_length,1)==-1){
+	    perror(NULL);
+	    exit(-1);
+	  }
+	  if(write(command_file_desc,hunt_name,hunt_name_length)==-1){
+	    perror(NULL);
+	    exit(-1);
+	  }
 	  sigqueue(monitor_pid,SIGUSR1,(union sigval)3);
 	  pause();
 	}
@@ -165,6 +201,84 @@ int main(){
       }
       case 4:{
         if(monitor_status){
+	  //truncates the command file to prepare it for the next command
+	  ftruncate(command_file_desc,0);
+	  printf("NOTE: You can provide both the Treasure ID and the User Name in that order, either User Name or Treasure ID, or none. If only one parameter is provided, if it is an integer, it is going to be considered the Treasure ID, otherwise it is going to be considered the User Name. If no parameter is provided, the 'list treasures' option will execute, using the Hunt ID provided.\n\n");
+	  //reads hunt name
+	  char hunt_name[100],hunt_name_length;
+	  printf("Hunt name: ");
+	  if(fgets(hunt_name,100,stdin)==NULL){
+	    printf("Error while reading input\n");
+	    exit(-1);
+	  }
+	  if(hunt_name[strlen(hunt_name)-1]!='\n') clear_buffer();
+	  hunt_name[strlen(hunt_name)-1]='\0';
+
+	  char input1[100],input1_length;
+	  printf("Parameter 1: ");
+	  if(fgets(input1,100,stdin)==NULL){
+	    printf("Error while reading input\n");
+	    exit(-1);
+	  }
+	  if(input1[strlen(input1)-1]!='\n') clear_buffer();
+	  input1[strlen(input1)-1]='\0';
+	  input1_length=strlen(input1)+1;
+      
+	  char input2[100],input2_length;
+	  printf("Parameter 2: ");
+	  if(fgets(input2,100,stdin)==NULL){
+	    printf("Error while reading input\n");
+	    exit(-1);
+	  }
+	  if(input2[strlen(input2)-1]!='\n') clear_buffer();
+	  input2[strlen(input2)-1]='\0';
+	  input2_length=strlen(input2)+1;
+	  printf("\n");
+	  
+	  /*
+	    Use case:
+	    0 - got nothing
+	    1 - got id or user name
+	    2 - got both id and user name
+	  */
+	  char use_case=(input1_length!=1)+(input2_length!=1);
+	  if(write(command_file_desc,&use_case,1)==-1){
+	    perror(NULL);
+	    exit(-1);
+	  }
+
+	  hunt_name_length=strlen(hunt_name)+1;
+	  if(write(command_file_desc,&hunt_name_length,1)==-1){
+	    perror(NULL);
+	    exit(-1);
+	  }
+	  if(write(command_file_desc,hunt_name,hunt_name_length)==-1){
+	    perror(NULL);
+	    exit(-1);
+	  }
+
+	  if(input1_length!=1){
+	    if(write(command_file_desc,&input1_length,1)==-1){
+	      perror(NULL);
+	      exit(-1);
+	    }
+	    if(write(command_file_desc,input1,input1_length)==-1){
+	      perror(NULL);
+	      exit(-1);
+	    }
+	  }
+	  
+	  if(input2_length!=1){
+	    if(write(command_file_desc,&input2_length,1)==-1){
+	      perror(NULL);
+	      exit(-1);
+	    }
+	    if(write(command_file_desc,input2,input2_length)==-1){
+	      perror(NULL);
+	      exit(-1);
+	    }
+	  }
+	  
 	  sigqueue(monitor_pid,SIGUSR1,(union sigval)4);
 	  pause();
 	}
@@ -178,6 +292,14 @@ int main(){
 	    exit(-1);
 	  }
 	  pause();
+	  if(close(command_file_desc)==-1){
+	    perror(NULL);
+	    exit(-1);
+	  }
+	  if(remove("./.monitor_command")==-1){
+	    perror(NULL);
+	    exit(-1);
+	  }
 	  printf("Stopping monitor\n");
 	  accepting_commands=0;
 	}

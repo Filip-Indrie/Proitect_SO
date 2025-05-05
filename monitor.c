@@ -47,15 +47,15 @@ void run_command(int sig,siginfo_t *info,void *context){
     }
     case 3:{
       //list treasures
-      char hunt_name[100];
-      printf("Hunt name: ");
-      if(fgets(hunt_name,100,stdin)==NULL){
-	printf("Error while reading input\n");
+      char hunt_name[100],hunt_name_len;
+      if(read(0,&hunt_name_len,1)==-1){
+	perror(NULL);
 	exit(-1);
       }
-      printf("\n");
-      if(hunt_name[strlen(hunt_name)-1]!='\n') clear_buffer();
-      hunt_name[strlen(hunt_name)-1]='\0';
+      if(read(0,hunt_name,hunt_name_len)==-1){
+	perror(NULL);
+	exit(-1);
+      }
       
       int command_pid;
       if((command_pid=fork())<0){
@@ -68,6 +68,7 @@ void run_command(int sig,siginfo_t *info,void *context){
 	  exit(-1);
 	}
       }
+      
       int status;
       if(waitpid(command_pid,&status,0)==-1){
 	perror(NULL);
@@ -82,37 +83,43 @@ void run_command(int sig,siginfo_t *info,void *context){
     }
     case 4:{
       //view treasure
-      char hunt_name[100];
-      printf("Hunt name: ");
-      if(fgets(hunt_name,100,stdin)==NULL){
-	printf("Error while reading input\n");
+      char use_case;
+      if(read(0,&use_case,1)==-1){
+	perror(NULL);
 	exit(-1);
       }
-      if(hunt_name[strlen(hunt_name)-1]!='\n') clear_buffer();
-      hunt_name[strlen(hunt_name)-1]='\0';
-
-      int got_treasure_id=0,got_user_name=0;
       
-      char treasure_id[20];
-      printf("Treasure ID: ");
-      if(fgets(treasure_id,20,stdin)==NULL){
-	printf("Error while reading input\n");
-	exit(-1);
-      }
-      if(treasure_id[strlen(treasure_id)-1]!='\n') clear_buffer();
-      treasure_id[strlen(treasure_id)-1]='\0';
-      got_treasure_id=(strlen(treasure_id)!=0);
+      char hunt_name[100],hunt_name_length;
+      char input1[100],input1_length;
+      char input2[100],input2_length;
       
-      char user_name[100];
-      printf("User name: ");
-      if(fgets(user_name,100,stdin)==NULL){
-	printf("Error while reading input\n");
+      if(read(0,&hunt_name_length,1)==-1){
+	perror(NULL);
 	exit(-1);
       }
-      if(user_name[strlen(user_name)-1]!='\n') clear_buffer();
-      user_name[strlen(user_name)-1]='\0';
-      got_user_name=(strlen(user_name)!=0);
-      printf("\n");
+      if(read(0,hunt_name,hunt_name_length)==-1){
+	perror(NULL);
+	exit(-1);
+      }
+      if(use_case!=0)
+      if(read(0,&input1_length,1)==-1){
+	perror(NULL);
+	exit(-1);
+      }
+      if(read(0,input1,input1_length)==-1){
+	perror(NULL);
+	exit(-1);
+      }
+      if(use_case==2){
+	if(read(0,&input2_length,1)==-1){
+	  perror(NULL);
+	  exit(-1);
+	}
+	if(read(0,input2,input2_length)==-1){
+	  perror(NULL);
+	  exit(-1);
+	}
+      }
       
       int command_pid;
       if((command_pid=fork())<0){
@@ -120,26 +127,24 @@ void run_command(int sig,siginfo_t *info,void *context){
 	exit(-1);
       }
       if(command_pid==0){
-	if(got_treasure_id && got_user_name){
-	  if(execl("./treasure_hunt","treasure_hunt","--view",hunt_name,treasure_id,user_name,NULL)==-1){
+	if(use_case==0){
+	  if(execl("./treasure_hunt","treasure_hunt","--view",hunt_name,NULL)==-1){
 	    perror(NULL);
 	    exit(-1);
 	  }
 	}
-	if(got_treasure_id){
-	  if(execl("./treasure_hunt","treasure_hunt","--view",hunt_name,treasure_id,NULL)==-1){
+	if(use_case==1){
+	  if(execl("./treasure_hunt","treasure_hunt","--view",hunt_name,input1,NULL)==-1){
 	    perror(NULL);
 	    exit(-1);
 	  }
 	}
-	if(got_user_name){
-	  if(execl("./treasure_hunt","treasure_hunt","--view",hunt_name,user_name,NULL)==-1){
+	if(use_case==2){
+	  if(execl("./treasure_hunt","treasure_hunt","--view",hunt_name,input1,input2,NULL)==-1){
 	    perror(NULL);
 	    exit(-1);
 	  }
 	}
-	printf("Invalid input\n");
-	exit(-1);
       }
       int status;
       if(waitpid(command_pid,&status,0)==-1){
