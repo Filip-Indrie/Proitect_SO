@@ -51,6 +51,14 @@ void do_nothing(){
   //empty on purpose
 }
 
+void remove_temporary_files(){
+  if(remove("./.monitor_command")==-1){
+    perror(NULL);
+    exit(-1);
+  }
+  exit(0);
+}
+
 void setup_signals(){
   /*
     sets up signal handlers
@@ -85,7 +93,18 @@ void setup_signals(){
   }
   sa.sa_handler = monitor_stopped;
   sa.sa_flags = SA_RESTART;
-  if(sigaction(SIGCHLD, &sa, NULL) == -1){
+  if(sigaction(SIGCHLD, &sa, NULL) == -1){//receives SIGCHLD when the monitor changes states
+    perror(NULL);
+    exit(-1);
+  }
+
+  if(sigemptyset(&sa.sa_mask)==-1){
+    perror(NULL);
+    exit(-1);
+  }
+  sa.sa_handler = remove_temporary_files;
+  sa.sa_flags = SA_RESTART;
+  if(sigaction(SIGINT, &sa, NULL) == -1){//received when user sends 'CTRL+C'
     perror(NULL);
     exit(-1);
   }
@@ -136,6 +155,8 @@ int main(){
   setup_signals();
   while(1){
     print_commands();
+
+    //reads option
     char buffer[3],*endptr=NULL;
     if(fgets(buffer,3,stdin)==NULL){
       printf("Error while reading option\n");
@@ -152,9 +173,11 @@ int main(){
       if(buffer[strlen(buffer)-1]!='\n') clear_buffer();
       continue;
     }
+    
     switch(command){
       case 1:{
         if(!monitor_status){
+	  //start monitor
 	  start_monitor(&monitor_pid,&command_file_desc);
 	  pause();
 	}
@@ -162,6 +185,7 @@ int main(){
         break;
       }
       case 2:{
+	//list hunts
 	if(monitor_status){
 	  sigqueue(monitor_pid,SIGUSR1,(union sigval)2);
 	  pause();
@@ -170,6 +194,7 @@ int main(){
         break;
       }
       case 3:{
+	//list treasures
         if(monitor_status){
 	  //truncates the command file to prepare it for the next command
 	  ftruncate(command_file_desc,0);
@@ -185,6 +210,8 @@ int main(){
 	  if(hunt_name[strlen(hunt_name)-1]!='\n') clear_buffer();
 	  hunt_name[strlen(hunt_name)-1]='\0';
 	  hunt_name_length=strlen(hunt_name)+1;
+
+	  //writes the length of the name and the name to the command file
 	  if(write(command_file_desc,&hunt_name_length,1)==-1){
 	    perror(NULL);
 	    exit(-1);
@@ -193,6 +220,7 @@ int main(){
 	    perror(NULL);
 	    exit(-1);
 	  }
+	  
 	  sigqueue(monitor_pid,SIGUSR1,(union sigval)3);
 	  pause();
 	}
@@ -200,9 +228,12 @@ int main(){
         break;
       }
       case 4:{
+	// view treasure
         if(monitor_status){
 	  //truncates the command file to prepare it for the next command
 	  ftruncate(command_file_desc,0);
+
+	  //reads hunt name and parameters
 	  printf("NOTE: You can provide both the Treasure ID and the User Name in that order, either User Name or Treasure ID, or none. If only one parameter is provided, if it is an integer, it is going to be considered the Treasure ID, otherwise it is going to be considered the User Name. If no parameter is provided, the 'list treasures' option will execute, using the Hunt ID provided.\n\n");
 	  //reads hunt name
 	  char hunt_name[100],hunt_name_length;
@@ -247,6 +278,7 @@ int main(){
 	    exit(-1);
 	  }
 
+	  //writes hunt name length and hunt name to command file
 	  hunt_name_length=strlen(hunt_name)+1;
 	  if(write(command_file_desc,&hunt_name_length,1)==-1){
 	    perror(NULL);
@@ -257,6 +289,7 @@ int main(){
 	    exit(-1);
 	  }
 
+	  //writes parameter 1 length and parameter 1 to command file
 	  if(input1_length!=1){
 	    if(write(command_file_desc,&input1_length,1)==-1){
 	      perror(NULL);
@@ -267,7 +300,8 @@ int main(){
 	      exit(-1);
 	    }
 	  }
-	  
+
+	  //writes parameter 2 length and parameter 2 to command file
 	  if(input2_length!=1){
 	    if(write(command_file_desc,&input2_length,1)==-1){
 	      perror(NULL);
@@ -286,6 +320,7 @@ int main(){
         break;
       }
       case 5:{
+	//stop monitor
         if(monitor_status){
 	  if(kill(monitor_pid,SIGUSR2)!=0){
 	    perror(NULL);
@@ -309,6 +344,7 @@ int main(){
         break;
       }
       case 6:{
+	//exit
 	if(monitor_status) printf("Monitor still running (PID: %d)\n",monitor_pid);
 	else return 0;
 	break;

@@ -47,6 +47,8 @@ void run_command(int sig,siginfo_t *info,void *context){
     }
     case 3:{
       //list treasures
+
+      //reads hunt name length and hunt name from command file
       char hunt_name[100],hunt_name_len;
       if(read(0,&hunt_name_len,1)==-1){
 	perror(NULL);
@@ -92,7 +94,8 @@ void run_command(int sig,siginfo_t *info,void *context){
       char hunt_name[100],hunt_name_length;
       char input1[100],input1_length;
       char input2[100],input2_length;
-      
+
+      //reads hunt name length and hunt name from command file
       if(read(0,&hunt_name_length,1)==-1){
 	perror(NULL);
 	exit(-1);
@@ -101,15 +104,20 @@ void run_command(int sig,siginfo_t *info,void *context){
 	perror(NULL);
 	exit(-1);
       }
-      if(use_case!=0)
-      if(read(0,&input1_length,1)==-1){
-	perror(NULL);
-	exit(-1);
+
+      //reads parameter 1 length and parameter 1 from command file
+      if(use_case!=0){
+	if(read(0,&input1_length,1)==-1){
+	  perror(NULL);
+	  exit(-1);
+	}
+	if(read(0,input1,input1_length)==-1){
+	  perror(NULL);
+	  exit(-1);
+	}
       }
-      if(read(0,input1,input1_length)==-1){
-	perror(NULL);
-	exit(-1);
-      }
+
+      //reads parameter 2 length and parameter 2 from command file if necessary
       if(use_case==2){
 	if(read(0,&input2_length,1)==-1){
 	  perror(NULL);
