@@ -62,7 +62,7 @@ void monitor_finished_operation(){
 }
 
 void remove_temporary_files(){
-  if(remove("./.monitor_command")==-1){
+  if(remove("./.monitor_command")==-1 && errno!=ENOENT){
     perror(NULL);
     exit(-1);
   }
