@@ -3,7 +3,7 @@ Run the following command to compile all the necessary files:
 ```
 ./compile.sh <executable_name>
 ```
-**compile.sh and all .c files must be located in the same directory!**
+**compile.sh, treasure_struct.h and all .c files must be located in the same directory!**
 
 **You must have bash and gcc installed for this command to run!**
 
