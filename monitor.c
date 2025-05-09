@@ -20,6 +20,7 @@ void run_command(int sig,siginfo_t *info,void *context){
     runs commands according to the signal info value
   */
   switch(info->si_value.sival_int){//checks data sent alongside signal
+    
     case 2:{
       //list hunts
       int command_pid;
@@ -45,6 +46,7 @@ void run_command(int sig,siginfo_t *info,void *context){
       }
       break;
     }
+      
     case 3:{
       //list treasures
 
@@ -83,8 +85,11 @@ void run_command(int sig,siginfo_t *info,void *context){
       }
       break;
     }
+      
     case 4:{
       //view treasure
+
+      //reads use case
       char use_case;
       if(read(0,&use_case,1)==-1){
 	perror(NULL);
@@ -170,6 +175,9 @@ void run_command(int sig,siginfo_t *info,void *context){
 }
 
 void terminate(int sig){
+  /*
+    sends a signal back to the parent so that it knows the child is terminating
+  */
   if(kill(getppid(),SIGUSR2)!=0){
     perror(NULL);
     exit(-1);
